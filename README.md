@@ -1,4 +1,20 @@
-# repo-glowup
+<!-- glowup:hero start -->
+<div align="center">
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner.svg">
+    <img src="docs/assets/banner-light.svg" alt="repo-glowup" width="880">
+  </picture>
+</h1>
+
+[![License](https://img.shields.io/github/license/bearyjd/repo-glowup?style=for-the-badge&color=8A63D2)](LICENSE)
+![Claude Code](https://img.shields.io/badge/Claude_Code-plugin-D97757?style=for-the-badge&logo=claude&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![SVG](https://img.shields.io/badge/SVG-FFB13B?style=for-the-badge&logo=svg&logoColor=black)
+![shields.io](https://img.shields.io/badge/shields.io-555?style=for-the-badge&logo=shieldsdotio&logoColor=white)
+
+</div>
+<!-- glowup:hero end -->
 
 A [Claude Code](https://docs.claude.com/en/docs/claude-code) plugin that gives any
 repository a polished, intentional GitHub presence — adapted to its stack:
