@@ -1,0 +1,22 @@
+{
+  "name": "repo-glowup",
+  "version": "0.1.0",
+  "description": "Give any repo a polished GitHub presence: a branded README hero banner (light + dark), status/tech badge chips, a 1280x640 social-preview card, and accurate About metadata — all adapted to the project's stack.",
+  "author": {
+    "name": "bearyjd",
+    "url": "https://github.com/bearyjd"
+  },
+  "homepage": "https://github.com/bearyjd/repo-glowup",
+  "repository": "https://github.com/bearyjd/repo-glowup",
+  "license": "MIT",
+  "keywords": [
+    "readme",
+    "branding",
+    "badges",
+    "social-preview",
+    "banner",
+    "github",
+    "svg",
+    "documentation"
+  ]
+}

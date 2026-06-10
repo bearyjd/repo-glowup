@@ -1,0 +1,14 @@
+{
+  "name": "bearyjd",
+  "owner": {
+    "name": "bearyjd",
+    "url": "https://github.com/bearyjd"
+  },
+  "plugins": [
+    {
+      "name": "repo-glowup",
+      "source": "./",
+      "description": "Branded README hero banner, badge chips, social-preview card, and GitHub About metadata for any repository."
+    }
+  ]
+}
