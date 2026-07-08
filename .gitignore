@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 .DS_Store
 branding.json
+.ruff_cache/
+
+# Agent runtime/session state (not project source)
+.omc/
