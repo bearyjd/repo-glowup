@@ -5,13 +5,14 @@ description: >
   look cooler", add a README banner or badges, set up a social-preview card, or fix the
   repo description/topics. Triggers on "repo glow-up", "readme banner", "badges",
   "social preview", "repo branding".
-argument-hint: "[--no-about] [--no-docs]"
+argument-hint: "[--no-about] [--docs] [--dry-run]"
 allowed-tools:
   - Bash
   - Read
   - Edit
   - Write
   - AskUserQuestion
+  - Skill
 ---
 
 # Repo Glow-Up
@@ -20,44 +21,49 @@ Give the **current repository** a polished, intentional GitHub presence, adapted
 stack: (1) a branded hero banner (light + dark), (2) status/tech badge chips, (3) a
 1280×640 social-preview card, (4) accurate About metadata (description, topics, homepage).
 
-Bundled tooling: `${CLAUDE_PLUGIN_ROOT}/skills/repo-glowup/scripts/` and
-`${CLAUDE_PLUGIN_ROOT}/skills/repo-glowup/references/badges.md`.
+Bundled tooling: `${CLAUDE_PLUGIN_ROOT}/skills/repo-glowup/scripts/`,
+`${CLAUDE_PLUGIN_ROOT}/skills/repo-glowup/references/badges.md`,
+`${CLAUDE_PLUGIN_ROOT}/skills/repo-glowup/references/ecosystems.json`.
 
-Flags in `$ARGUMENTS`: `--no-about` skips the `gh` metadata step; `--no-docs` skips the
-optional codemaps/CONTRIBUTING/RUNBOOK offer.
+Flags in `$ARGUMENTS`: `--no-about` skips step 5; `--docs` opts in to step 6; `--dry-run`
+generates into temp dirs, prints the drafted metadata, README diff and planned `gh`
+commands, and **changes nothing in the repo**. Nothing is ever committed.
 
 ## 0 · Preflight (check deps, fail soft)
 
 Confirm a git repo (`git rev-parse --is-inside-work-tree`), then probe and print a short
 table; continue with whatever is available:
 
-- `python3` — **required** (the banner generator; stdlib only).
-- `rsvg-convert` **or** `google-chrome`/`chromium` — to rasterize the social PNG. If
-  neither, generate the SVGs but skip the PNG and say so.
-- `python3 -c "import PIL"` (Pillow) — to emit a **GitHub-safe** PNG/JPG. GitHub's
-  social uploader rejects some raw rsvg PNGs ("can't process that picture"); the Pillow
-  re-encode fixes it. If missing, warn and continue with the raw PNG.
-- `gh auth status` — needed for About + live status badges. If missing, skip About and
-  use a plain (non-status) build badge.
-- Fonts: `fc-list | grep -i cantarell` and Fira Code. If absent the SVG still renders;
-  only the rasterized PNG falls back to other fonts. Note it.
+- `python3` — **required** (banner generator; stdlib only).
+- `rsvg-convert` **or** `google-chrome`/`chromium` — rasterizing. `rasterize.sh` exit
+  code 2 means none found: a **soft failure** (keep SVGs, skip PNG, say so).
+- `python3 -c "import PIL"` (Pillow) — GitHub-safe PNG/JPG re-encode (raw rsvg PNGs are
+  sometimes rejected by the social uploader). If missing, warn and use the raw PNG.
+- `gh auth status` — needed for About, visibility and default branch. If missing, skip
+  About and use a plain (non-status) build badge.
 
 ## 1 · Detect the project (read, don't guess)
 
-- Current metadata: `gh repo view --json name,description,repositoryTopics,homepageUrl,licenseInfo`.
-- Stack signals: `package.json` (node), `pyproject.toml`/`setup.*` (python),
-  `Cargo.toml` (rust), `go.mod` (go), `composer.json` (php), `Gemfile` (ruby),
-  `Containerfile`/`Dockerfile` or `kargs.d`/bootc (container/OS image), else generic.
-- License → SPDX; `.github/workflows/*.yml` → the main build/test workflow filename(s)
-  for status badges; the README's first paragraph for tagline material.
+- Metadata: `gh repo view --json name,description,repositoryTopics,homepageUrl,licenseInfo,isPrivate,defaultBranchRef`.
+- Default branch: `defaultBranchRef.name`, else `git symbolic-ref --short refs/remotes/origin/HEAD`
+  (strip `origin/`), else `main`. Use it in the status badge.
+- Visibility: for private repos **skip every shields.io `github/*` badge** (they don't
+  render) and tell the user why; use static `badge/…` chips and registry badges only. If
+  visibility can't be determined (no `gh`), ask via AskUserQuestion, defaulting to
+  static/registry-only badges.
+- Ecosystem: match root files against `references/ecosystems.json`
+  (`{ecosystem: {markers, alt_markers, palette}}`). If **more than one** ecosystem
+  matches (polyglot/monorepo), list them and let the user pick in step 2; do not take
+  the first match. None matches → `generic`. The file gives each ecosystem's palette.
+- License → SPDX; `.github/workflows/*.yml` → main build/test workflow for the status
+  badge; README's first paragraph for tagline material.
 
-Derive a metadata draft:
+Draft metadata:
 
 | field | how |
 |---|---|
 | name | repo name |
-| ecosystem | node / python / rust / go / php / ruby / container / generic |
-| palette | node→`forest`, python→`ocean`, rust→`crimson`, go→`ocean`, container/bootc→`ocean`, php→`violet`, ruby→`ember`, generic→`slate` (or by vibe) |
+| ecosystem / palette | from `ecosystems.json` (or by vibe) |
 | eyebrow | short uppercase mono, e.g. `TYPESCRIPT · EDGE RUNTIME` |
 | tagline | one sentence (≤ ~60 chars) — condense the repo description |
 | subline | install/run line: `npm i X` / `pipx install X` / `cargo add X` / `go install …` / `docker pull ghcr.io/<owner>/<name>` |
@@ -67,35 +73,62 @@ Derive a metadata draft:
 
 ## 2 · Confirm with the user
 
-Show the drafted metadata (name / eyebrow / tagline / subline / palette / description /
-topics) and let them edit before applying — wording and palette are subjective. If the
-palette is unclear, offer the six presets via AskUserQuestion.
+Show the draft (name / eyebrow / tagline / subline / palette / description / topics) and
+let them edit — wording and palette are subjective; offer the six presets via
+AskUserQuestion if unclear. Also settle here:
+
+- **Ecosystem** if step 1 found several.
+- **Topics diff**: existing topics vs proposed, as old→new with additions and removals
+  listed separately. Removals happen only for topics the user approves.
+- **Homepage**: if one already exists, keep it unless the user confirms a change.
+- **Asset dir** (`ASSETS`): default `docs/assets`. If `docs/` is a site (has an index or
+  config file) or already holds unrelated files, ask for another dir (suggest
+  `.github/assets`). Use `ASSETS` consistently in steps 3, 4 and 7.
 
 ## 3 · Generate the art
 
-Write a temp `branding.json` with the confirmed fields, then:
+Write `branding.json` into a `mktemp -d` dir (never the user's repo). Overwrite only
+glowup-owned files: `banner.svg`, `banner-light.svg`, `social-preview.*`.
 
 ```bash
+CFG=$(mktemp -d); PREVIEW=$(mktemp -d)   # write $CFG/branding.json first
+OUT=<ASSETS dir from step 2>             # with --dry-run: OUT=$(mktemp -d) instead
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/repo-glowup/scripts/gen_branding.py" \
-  --config branding.json --outdir docs/assets
-bash "${CLAUDE_PLUGIN_ROOT}/skills/repo-glowup/scripts/rasterize.sh" docs/assets
+  --config "$CFG/branding.json" --outdir "$OUT"
+bash "${CLAUDE_PLUGIN_ROOT}/skills/repo-glowup/scripts/rasterize.sh" "$OUT" "$PREVIEW"
+echo "CFG=$CFG PREVIEW=$PREVIEW OUT=$OUT"   # shell state doesn't persist — keep these paths
 ```
 
-Then **Read `docs/assets/social-preview.png`** and verify visually (no text overflow,
-correct wording). Regenerate if anything is off.
+Then **Read** `$OUT/social-preview.png` plus `$PREVIEW/banner.png` and
+`$PREVIEW/banner-light.png` (use the literal paths echoed above); verify visually (no
+overflow, correct wording) and regenerate if off. Finally clean up:
+`rm -rf "$CFG" "$PREVIEW"` (plus the dry-run `$OUT`).
+
+- Exit 1 from `rasterize.sh`: generation failed (no `social-preview.svg`). Stop and report.
+- Exit 2 from `rasterize.sh`: no rasterizer, or Chrome rendered nothing. Keep the SVGs,
+  skip PNG checks, and tell the user the social-card upload is unavailable until
+  `rsvg-convert` or a working Chrome is installed.
+- If it prints a WARN that the PNG exceeds 1 MB, point the user to the `.jpg` in step 7.
 
 ## 4 · Wire the README hero (idempotent)
 
-Insert a managed block at the very top, preserving the rest of the README. If the markers
-already exist, replace only what's between them:
+Find the README: `README.md`, `.github/README.md` or `docs/README.md`.
+
+- Not markdown (`.rst`, `.adoc`, other): offer a hero in that format's equivalent image
+  syntax, or skip this step with a message.
+- No README: offer to create a minimal one; create it only if the user agrees.
+- Existing top-of-file `<h1>` or banner image **without** glowup markers: show it and ask
+  replace or keep. Never silently duplicate.
+- Insert the managed block at the very top, preserving the rest. If the markers exist,
+  replace only what's between them:
 
 ```
 <!-- glowup:hero start -->
 <div align="center">
 <h1>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner.svg">
-    <img src="docs/assets/banner-light.svg" alt="NAME" width="880">
+    <source media="(prefers-color-scheme: dark)" srcset="ASSETS/banner.svg">
+    <img src="ASSETS/banner-light.svg" alt="NAME" width="880">
   </picture>
 </h1>
 
@@ -104,29 +137,41 @@ BADGES
 <!-- glowup:hero end -->
 ```
 
-Pick badges from `${CLAUDE_PLUGIN_ROOT}/skills/repo-glowup/references/badges.md`: a CI
-**status** badge (from the detected workflow), license, registry/version, and 4–6
-ecosystem tech chips — all `style=for-the-badge`. Verify a couple resolve to
-`image/svg+xml` (curl `-sI`) before finishing.
+(Relative to the README's own directory if it isn't the repo root.) Pick badges from
+`references/badges.md` (all `style=for-the-badge`): CI **status** (detected workflow, on
+the detected default branch), license, registry/version, and 4–6 tech chips for the
+chosen ecosystem. Tech chips come from `badges.md` rows matching stack signals actually
+seen in the repo, not only the `ecosystems.json` match. Verify a couple resolve to
+`image/svg+xml` (`curl -sI`). Before finishing, show the README diff (`git diff --stat`
+and `git diff -- <README>`). With `--dry-run`, show the diff against a temp copy instead
+of editing.
 
-## 5 · GitHub About  (skip if `--no-about` or no `gh`)
+## 5 · GitHub About  (skip if `--no-about` or no `gh`; with `--dry-run` print only)
+
+Merge, don't clobber. Apply only approved changes:
 
 ```bash
-gh repo edit --description "…" --homepage "<package/registry or docs URL>" \
-  --add-topic tag1,tag2,tag3,…
+gh repo edit --description "…" --add-topic a,b --remove-topic old1,old2 \
+  [--homepage "<url>"]   # homepage only if empty or the user confirmed
 ```
 
-## 6 · Docs  (optional; skip if `--no-docs`)
+Omit `--remove-topic` unless the user approved removals. If there is no remote, or `gh`
+errors (no push/admin permission), print the exact `gh repo edit …` command for the user
+to run and continue.
 
-Offer to run `/update-codemaps` and `/update-docs` for codemaps + CONTRIBUTING/RUNBOOK.
+## 6 · Docs  (only with `--docs`)
+
+Offer `/update-codemaps` and `/update-docs` via the Skill tool; if not installed, say so and skip.
 
 ## 7 · Social card upload  (manual — there is no API)
 
-Tell the user to upload `docs/assets/social-preview.png` (or `.jpg`) at
-**Settings → General → Social preview**. Print the absolute path.
+Tell the user to upload `ASSETS/social-preview.png` (or `.jpg`) at
+**Settings → General → Social preview**; print the absolute path. Unavailable if step 3
+had no rasterizer.
 
 ## 8 · Verify & report
 
-- A couple of badge SVG URLs return `200 image/svg+xml`.
-- README image paths exist; `gh repo view` reflects the new About.
-- Summarize what changed and restate the single manual step (the upload).
+- Badge URLs return `200 image/svg+xml`; README image paths exist; `gh repo view` shows
+  the new About (unless skipped or dry-run).
+- **Nothing was committed**: show `git status --short`. For private repos, restate that
+  `github/*` badges were omitted. Restate the one manual step (the upload).

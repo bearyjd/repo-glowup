@@ -1,0 +1,10 @@
+{
+  "node":      {"markers": ["package.json"],   "alt_markers": [], "palette": "forest"},
+  "python":    {"markers": ["pyproject.toml"], "alt_markers": ["setup.py", "setup.cfg"], "palette": "ocean"},
+  "rust":      {"markers": ["Cargo.toml"],     "alt_markers": [], "palette": "crimson"},
+  "go":        {"markers": ["go.mod"],         "alt_markers": [], "palette": "slate"},
+  "php":       {"markers": ["composer.json"],  "alt_markers": [], "palette": "violet"},
+  "ruby":      {"markers": ["Gemfile"],        "alt_markers": ["*.gemspec"], "palette": "ember"},
+  "container": {"markers": ["Dockerfile"],     "alt_markers": ["Containerfile", "kargs.d"], "palette": "violet"},
+  "generic":   {"markers": ["README.md"],      "alt_markers": [], "palette": "slate"}
+}

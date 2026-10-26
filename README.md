@@ -65,7 +65,7 @@ python3 skills/repo-glowup/scripts/gen_branding.py \
   --subline "cargo install my-project" \
   --footnote "single binary · zero config · cross-platform" \
   --outdir docs/assets
-bash skills/repo-glowup/scripts/rasterize.sh docs/assets
+bash skills/repo-glowup/scripts/rasterize.sh docs/assets "$(mktemp -d)"
 ```
 
 Palettes: `ocean`, `ember`, `violet`, `forest`, `slate`, `crimson` — or pass your own
