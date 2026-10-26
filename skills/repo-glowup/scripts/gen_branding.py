@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from typing import NamedTuple
 
 # --- palette presets: 6 base colours bottom->top; the 6th doubles as the crown.
@@ -38,8 +39,14 @@ FONT = "Cantarell, 'Segoe UI', 'Noto Sans', sans-serif"
 MONO = "'Fira Code', 'DejaVu Sans Mono', ui-monospace, monospace"
 
 
+TEXT_KEYS = ("name", "eyebrow", "tagline", "subline", "footnote")
+_RAMP_RE = re.compile(r"^#?(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
+
+
 def _hex(h: str) -> tuple[int, int, int]:
     h = h.lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
 
 
@@ -61,16 +68,64 @@ def darken(h: str, f: float) -> str:
     return _rgb(r * (1 - f), g * (1 - f), b * (1 - f))
 
 
+def parse_ramp(value) -> list[str]:
+    """Validate a ramp (comma string or list) -> six '#RRGGBB' colours; ValueError if bad."""
+    if isinstance(value, str):
+        items = value.split(",")
+    elif isinstance(value, (list, tuple)):
+        items = [str(c) for c in value]
+    else:
+        raise ValueError("ramp must be a comma-separated string or a list of 6 hex colours")
+    items = [c.strip() for c in items]
+    if len(items) != 6:
+        raise ValueError(f"ramp needs exactly 6 hex colours, got {len(items)}")
+    for c in items:
+        if not _RAMP_RE.match(c):
+            raise ValueError(f"invalid ramp colour {c!r} (expected #RGB or #RRGGBB)")
+    return [_rgb(*_hex(c)) for c in items]
+
+
+def coerce_text(cfg: dict) -> dict:
+    """Copy of cfg with the text keys as str (None/missing -> '')."""
+    return {**cfg, **{k: "" if cfg.get(k) is None else str(cfg[k]) for k in TEXT_KEYS}}
+
+
 def esc(s: str) -> str:
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+             .replace('"', "&quot;").replace("'", "&#39;"))
 
 
-def fit(size_max: float, avail: float, text: str, factor: float = 0.56) -> float:
-    """Shrink a font size so `text` fits within `avail` px (rough advance model)."""
+def fit(size_max: float, avail: float, text: str, factor: float = 0.56,
+        size_min: float | None = None, spacing: float = 0.0) -> float:
+    """Shrink a font size so `text` fits within `avail` px (rough advance model).
+
+    `spacing` is letter-spacing as a fraction of font size; never goes below
+    `size_min` (default 60% of size_max) -- use truncate() for what still overflows.
+    """
+    if size_min is None:
+        size_min = size_max * 0.6
     if not text:
         return size_max
-    need = len(text) * factor
-    return min(size_max, avail / need) if need else size_max
+    need = len(text) * (factor + spacing)
+    return max(size_min, min(size_max, avail / need)) if need else size_max
+
+
+def truncate(text: str, avail: float, size: float, factor: float = 0.56,
+             spacing: float = 0.0) -> str:
+    """Cut `text` with a trailing '\u2026' so it fits `avail` px at `size`.
+
+    Known limit: width is counted in code points, so CJK/emoji (wider glyphs) may overflow.
+    """
+    per = size * (factor + spacing)
+    n = int(avail // per) if per else len(text)
+    return text if len(text) <= n else text[:max(n - 1, 0)] + "\u2026"
+
+
+def fit_text(text: str, size_max: float, avail: float, factor: float = 0.56,
+             spacing: float = 0.0) -> tuple[float, str]:
+    """(font size, escaped text) shrunk to fit and truncated if the floor is not enough."""
+    size = fit(size_max, avail, text, factor, spacing=spacing)
+    return size, esc(truncate(text, avail, size, factor, spacing))
 
 
 class Geo(NamedTuple):
@@ -106,11 +161,7 @@ def _tower(g: Geo, ramp: list[str]) -> str:
 def build(kind: str, theme: str, cfg: dict, ramp: list[str]) -> str:
     accent = ramp[3]
     crown = ramp[5]
-    name = esc(cfg["name"])
-    eyebrow = esc(cfg.get("eyebrow", ""))
-    tagline = esc(cfg.get("tagline", ""))
-    subline = esc(cfg.get("subline", ""))
-    footnote = esc(cfg.get("footnote", ""))
+    cfg = coerce_text(cfg)
 
     if theme == "dark":
         bg0, bg1, bg2 = "#0E1426", "#0A0E1C", "#070910"
@@ -130,20 +181,23 @@ def build(kind: str, theme: str, cfg: dict, ramp: list[str]) -> str:
         g = Geo(cx=352, w=165, h=82, t=40, gap=16, bottom_cy=476)
         tx = 588
         avail = 1240 - tx
-        ws = fit(84, avail, cfg["name"])
-        ts = fit(30, avail, cfg.get("tagline", ""), 0.50)
+        ws, name = fit_text(cfg["name"], 84, avail)
+        ts, tagline = fit_text(cfg["tagline"], 30, avail, 0.50)
+        es, eyebrow = fit_text(cfg["eyebrow"], 24, avail, 0.62, 0.25)
+        ss, subline = fit_text(cfg["subline"], 25, avail, 0.62)
+        fs, footnote = fit_text(cfg["footnote"], 22, avail)
         body = (
-            f'  <text x="{tx}" y="236" font-family="{MONO}" font-size="24" '
-            f'letter-spacing="6" fill="{c_eye}">{eyebrow}</text>\n'
+            f'  <text x="{tx}" y="236" font-family="{MONO}" font-size="{es:g}" '
+            f'letter-spacing="{es/4:g}" fill="{c_eye}">{eyebrow}</text>\n'
             f'  <text x="{tx}" y="322" font-family="{FONT}" font-weight="800" '
             f'font-size="{ws:.0f}" fill="{c_word}">{name}</text>\n'
             f'  <text x="{tx}" y="374" font-family="{FONT}" font-size="{ts:.0f}" '
             f'fill="{c_tag}">{tagline}</text>\n'
             f'  <rect x="{tx}" y="402" width="{avail}" height="2" rx="1" '
             f'fill="{c_div}" opacity="0.40"/>\n'
-            f'  <text x="{tx}" y="446" font-family="{MONO}" font-size="25" '
+            f'  <text x="{tx}" y="446" font-family="{MONO}" font-size="{ss:.0f}" '
             f'fill="{c_sub}">{subline}</text>\n'
-            f'  <text x="{tx}" y="486" font-family="{FONT}" font-size="22" '
+            f'  <text x="{tx}" y="486" font-family="{FONT}" font-size="{fs:.0f}" '
             f'fill="{c_foot}">{footnote}</text>\n'
         )
     else:  # banner
@@ -151,16 +205,18 @@ def build(kind: str, theme: str, cfg: dict, ramp: list[str]) -> str:
         g = Geo(cx=150, w=70, h=35, t=18, gap=8, bottom_cy=250)
         tx = 300
         avail = 1240 - tx
-        ws = fit(78, avail, cfg["name"])
-        ts = fit(27, avail, cfg.get("tagline", ""), 0.50)
+        ws, name = fit_text(cfg["name"], 78, avail)
+        ts, tagline = fit_text(cfg["tagline"], 27, avail, 0.50)
+        es, eyebrow = fit_text(cfg["eyebrow"], 20, avail, 0.62, 0.25)
+        ss, subline = fit_text(cfg["subline"], 22, avail, 0.62)
         body = (
-            f'  <text x="{tx}" y="128" font-family="{MONO}" font-size="20" '
-            f'letter-spacing="5" fill="{c_eye}">{eyebrow}</text>\n'
+            f'  <text x="{tx}" y="128" font-family="{MONO}" font-size="{es:g}" '
+            f'letter-spacing="{es/4:g}" fill="{c_eye}">{eyebrow}</text>\n'
             f'  <text x="{tx}" y="206" font-family="{FONT}" font-weight="800" '
             f'font-size="{ws:.0f}" fill="{c_word}">{name}</text>\n'
             f'  <text x="{tx}" y="252" font-family="{FONT}" font-size="{ts:.0f}" '
             f'fill="{c_tag}">{tagline}</text>\n'
-            f'  <text x="{tx}" y="290" font-family="{MONO}" font-size="22" '
+            f'  <text x="{tx}" y="290" font-family="{MONO}" font-size="{ss:.0f}" '
             f'fill="{c_sub}">{subline}</text>\n'
         )
 
@@ -189,7 +245,7 @@ def build(kind: str, theme: str, cfg: dict, ramp: list[str]) -> str:
     clip = (f'  <clipPath id="r"><rect width="{W}" height="{H}" rx="{rx}"/></clipPath>\n'
             if rx else "")
     g_open = '<g clip-path="url(#r)">' if rx else "<g>"
-    label = esc(f'{cfg["name"]} — {cfg.get("tagline", "")}'.rstrip(" —"))
+    label = esc(f'{cfg["name"]} — {cfg["tagline"]}'.rstrip(" —"))
 
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" '
@@ -241,12 +297,14 @@ def main() -> None:
     if not cfg.get("name"):
         p.error("a repo name is required (--name or \"name\" in --config)")
 
-    if cfg.get("ramp"):
-        ramp = [c.strip() for c in cfg["ramp"].split(",")]
-        if len(ramp) != 6:
-            p.error("--ramp needs exactly 6 comma-separated hex colours")
+    cfg = coerce_text(cfg)
+    if cfg.get("ramp") is not None:
+        try:
+            ramp = parse_ramp(cfg["ramp"])
+        except ValueError as e:
+            p.error(f"--ramp/\"ramp\": {e}")
     else:
-        ramp = PALETTES.get(cfg["palette"])
+        ramp = PALETTES.get(str(cfg["palette"]))
         if not ramp:
             p.error(f"unknown palette {cfg['palette']!r}; choices: {', '.join(PALETTES)}")
 

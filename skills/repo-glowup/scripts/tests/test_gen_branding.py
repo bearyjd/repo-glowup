@@ -8,6 +8,7 @@ generator itself (see CLAUDE.md).
 """
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -102,9 +103,10 @@ class FitTests(unittest.TestCase):
         self.assertGreater(size, 0)
 
     def test_custom_factor_changes_result(self):
-        text = "a" * 100
-        default_size = gb.fit(84, 500, text)
-        smaller_factor_size = gb.fit(84, 500, text, factor=0.20)
+        # inputs chosen so the 60% size floor doesn't clamp both results to the same value
+        text = "a" * 20
+        default_size = gb.fit(84, 700, text)
+        smaller_factor_size = gb.fit(84, 700, text, factor=0.20)
         self.assertGreater(smaller_factor_size, default_size)
 
 
@@ -149,6 +151,215 @@ class BuildTests(unittest.TestCase):
         svg = gb.build("banner", "dark", cfg, ramp)
         self.assertNotIn("<script>", svg)
         ET.fromstring(svg)  # must still be well-formed
+
+
+class HexShorthandTests(unittest.TestCase):
+    def test_three_digit_expands(self):
+        self.assertEqual(gb._hex("#111"), (17, 17, 17))
+        self.assertEqual(gb._hex("abc"), (0xAA, 0xBB, 0xCC))
+
+    def test_six_digit_unchanged(self):
+        self.assertEqual(gb._hex("#1D74C8"), (0x1D, 0x74, 0xC8))
+
+
+class ParseRampTests(unittest.TestCase):
+    def test_string_with_shorthand_normalised(self):
+        got = gb.parse_ramp("#111,#222,#333,#444,#555,#666")
+        self.assertEqual(got, ["#111111", "#222222", "#333333",
+                               "#444444", "#555555", "#666666"])
+
+    def test_list_input_and_missing_hash(self):
+        got = gb.parse_ramp(["abc", "#def", "112233", "#445566", "#778899", "#aabbcc"])
+        self.assertEqual(got[0], "#AABBCC")
+        self.assertEqual(got[5], "#AABBCC")
+        for c in got:
+            self.assertRegex(c, HEX_RE)
+
+    def test_bad_colour_raises_with_message(self):
+        with self.assertRaises(ValueError) as cm:
+            gb.parse_ramp("#111,#222,#333,#444,#555,zzz")
+        self.assertIn("zzz", str(cm.exception))
+
+    def test_wrong_count_raises(self):
+        with self.assertRaises(ValueError):
+            gb.parse_ramp("#111,#222")
+
+    def test_bad_type_raises(self):
+        with self.assertRaises(ValueError):
+            gb.parse_ramp(12345)
+
+    def test_four_or_five_digit_hex_rejected(self):
+        with self.assertRaises(ValueError):
+            gb.parse_ramp("#1234,#222,#333,#444,#555,#666")
+
+
+class EscQuoteTests(unittest.TestCase):
+    def test_escapes_double_quote(self):
+        self.assertEqual(gb.esc('say "hi"'), "say &quot;hi&quot;")
+
+    def test_escapes_single_quote(self):
+        self.assertEqual(gb.esc("it's"), "it&#39;s")
+
+
+class FitFloorTests(unittest.TestCase):
+    def test_default_floor_is_sixty_percent(self):
+        self.assertAlmostEqual(gb.fit(100, 10, "a" * 500), 60)
+
+    def test_explicit_size_min(self):
+        self.assertAlmostEqual(gb.fit(100, 10, "a" * 500, size_min=40), 40)
+
+    def test_spacing_shrinks_size(self):
+        self.assertLess(gb.fit(24, 300, "a" * 20, 0.6, spacing=0.25),
+                        gb.fit(24, 300, "a" * 20, 0.6))
+
+
+class TruncateTests(unittest.TestCase):
+    def test_fits_unchanged(self):
+        self.assertEqual(gb.truncate("short", 500, 20, 0.6), "short")
+
+    def test_too_long_gets_ellipsis_and_fits(self):
+        out = gb.truncate("x" * 100, 200, 20, 0.6)
+        self.assertTrue(out.endswith("\u2026"))
+        self.assertLessEqual(len(out) * 20 * 0.6, 200)
+
+    def test_empty(self):
+        self.assertEqual(gb.truncate("", 10, 20, 0.6), "")
+
+    def test_tiny_avail_still_returns_ellipsis(self):
+        self.assertEqual(gb.truncate("abcdef", 1, 20, 0.6), "\u2026")
+
+
+class CoerceTests(unittest.TestCase):
+    def test_numbers_become_strings_and_missing_default_empty(self):
+        out = gb.coerce_text({"name": 123, "tagline": 4.5, "eyebrow": None})
+        self.assertEqual(out["name"], "123")
+        self.assertEqual(out["tagline"], "4.5")
+        self.assertEqual(out["eyebrow"], "")
+        self.assertEqual(out["subline"], "")
+        self.assertEqual(out["footnote"], "")
+
+    def test_does_not_mutate_input(self):
+        src = {"name": 1}
+        gb.coerce_text(src)
+        self.assertEqual(src, {"name": 1})
+
+
+HOSTILE = [
+    'The "fast" thing',
+    "it's a & b < c > d",
+    "caf\u00e9 \u65e5\u672c\u8a9e \u0645\u0631\u062d\u0628\u0627",
+    "rocket \U0001F680 launch \U0001F468\u200d\U0001F4BB",
+    "x" * 400,
+]
+
+
+class HostileBuildTests(unittest.TestCase):
+    def test_all_fields_hostile_parse_everywhere(self):
+        ramp = gb.PALETTES["ocean"]
+        for text in HOSTILE:
+            cfg = {"name": text, "eyebrow": text, "tagline": text,
+                   "subline": text, "footnote": text}
+            for kind in ("banner", "social"):
+                for theme in ("dark", "light"):
+                    with self.subTest(text=text[:12], kind=kind, theme=theme):
+                        ET.fromstring(gb.build(kind, theme, cfg, ramp))
+
+    def test_long_text_is_truncated_with_ellipsis(self):
+        cfg = {"name": "n", "subline": "y" * 400, "footnote": "z" * 400,
+               "eyebrow": "E" * 400}
+        svg = gb.build("social", "dark", cfg, gb.PALETTES["ocean"])
+        self.assertNotIn("y" * 400, svg)
+        self.assertGreaterEqual(svg.count("\u2026"), 3)
+
+    def test_normal_text_not_truncated(self):
+        cfg = {"name": "proj", "eyebrow": "TEST", "tagline": "A tagline",
+               "subline": "npm i proj", "footnote": "a . b . c"}
+        svg = gb.build("social", "dark", cfg, gb.PALETTES["ocean"])
+        self.assertNotIn("\u2026", svg)
+        self.assertIn('font-size="24" letter-spacing="6"', svg)
+        self.assertIn('font-size="84"', svg)
+
+
+def run_cli(*args):
+    return subprocess.run([sys.executable, str(SCRIPTS_DIR / "gen_branding.py"), *args],
+                          capture_output=True, text=True, timeout=30)
+
+
+class CliTests(unittest.TestCase):
+    def test_short_hex_ramp_generates(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = run_cli("--name", "X", "--ramp", "#111,#222,#333,#444,#555,#666",
+                        "--outdir", d)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            ET.parse(Path(d) / "social-preview.svg")
+
+    def test_bad_ramp_exits_2_without_traceback(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = run_cli("--name", "X", "--ramp", "#111,#222,#333,#444,#555,nope",
+                        "--outdir", d)
+            self.assertEqual(r.returncode, 2)
+            self.assertNotIn("Traceback", r.stderr)
+            self.assertIn("nope", r.stderr)
+
+    def test_bad_ramp_in_config_list_exits_2(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfgp = Path(d) / "c.json"
+            cfgp.write_text(json.dumps({"name": "X", "outdir": d,
+                                        "ramp": ["#111", "#222", "#333", "#444", "#555", "#12"]}))
+            r = run_cli("--config", str(cfgp))
+            self.assertEqual(r.returncode, 2)
+            self.assertNotIn("Traceback", r.stderr)
+
+    def test_config_ramp_list_and_string_and_numeric_scalars(self):
+        ramps = [["#111", "#222", "#333", "#444", "#555", "#666"],
+                 "#111,#222,#333,#444,#555,#666"]
+        for ramp in ramps:
+            with self.subTest(ramp=ramp), tempfile.TemporaryDirectory() as d:
+                cfgp = Path(d) / "c.json"
+                cfgp.write_text(json.dumps({"name": 123, "tagline": 4.5, "subline": 7,
+                                            "outdir": d, "ramp": ramp}))
+                r = run_cli("--config", str(cfgp))
+                self.assertEqual(r.returncode, 0, r.stderr)
+                ET.parse(Path(d) / "banner.svg")
+
+    def test_wrong_ramp_type_in_config_exits_2(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfgp = Path(d) / "c.json"
+            cfgp.write_text(json.dumps({"name": "X", "outdir": d, "ramp": 5}))
+            r = run_cli("--config", str(cfgp))
+            self.assertEqual(r.returncode, 2)
+            self.assertNotIn("Traceback", r.stderr)
+
+    def test_empty_ramp_in_config_exits_2(self):
+        for ramp in ([], "", {}):
+            with self.subTest(ramp=ramp), tempfile.TemporaryDirectory() as d:
+                cfgp = Path(d) / "c.json"
+                cfgp.write_text(json.dumps({"name": "X", "outdir": d, "ramp": ramp}))
+                r = run_cli("--config", str(cfgp))
+                self.assertEqual(r.returncode, 2)
+                self.assertNotIn("Traceback", r.stderr)
+
+    def test_null_ramp_falls_back_to_palette(self):
+        with tempfile.TemporaryDirectory() as d:
+            cfgp = Path(d) / "c.json"
+            cfgp.write_text(json.dumps({"name": "X", "outdir": d, "ramp": None}))
+            self.assertEqual(run_cli("--config", str(cfgp)).returncode, 0)
+
+    def test_non_string_palette_exits_2_without_traceback(self):
+        for pal in (["ocean"], 5):
+            with self.subTest(palette=pal), tempfile.TemporaryDirectory() as d:
+                cfgp = Path(d) / "c.json"
+                cfgp.write_text(json.dumps({"name": "X", "outdir": d, "palette": pal}))
+                r = run_cli("--config", str(cfgp))
+                self.assertEqual(r.returncode, 2)
+                self.assertNotIn("Traceback", r.stderr)
+
+    def test_quoted_tagline_cli_parses(self):
+        with tempfile.TemporaryDirectory() as d:
+            r = run_cli("--name", "X", "--tagline", 'The "fast" thing', "--outdir", d)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            for f in ("banner.svg", "banner-light.svg", "social-preview.svg"):
+                ET.parse(Path(d) / f)
 
 
 class SmokeTest(unittest.TestCase):
