@@ -3,6 +3,23 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.1]
+
+### Fixed
+- `gen_branding.py`: social-card text is no longer truncated by a float-boundary bug in
+  the text-fitting logic.
+
+### Changed (`SKILL.md` clarifications)
+- Detection: `generic` is fallback only; default branch falls back to the local branch
+  and `init.defaultBranch`; no-remote repos derive names from the directory/manifests and
+  treat visibility as unknown; `bootc switch` subline form.
+- Topics: existing topics are kept (additions only); `gh repo edit` is skipped when
+  nothing changed; existing glowup assets dirs are reused; existing chips are listed.
+- Art: `branding.json` keys listed; tighter tagline/subline limits for the social card,
+  ellipsis treated as a failure; cleanup uses `rm -r --` on the two temp paths.
+- README: blank line after `<div align="center">`, one badge per line, duplicate H1 and
+  old banner handling, badge check retries once; step 8 gives an image-path check command.
+
 ## [0.2.0]
 
 ### Changed (generator and rasterizer, implemented separately from the skill spec)

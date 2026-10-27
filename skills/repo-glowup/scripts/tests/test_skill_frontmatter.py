@@ -40,6 +40,15 @@ class SkillFrontmatterTest(unittest.TestCase):
     def test_allowed_tools_known(self):
         self.assertLessEqual(set(self.fm["allowed-tools"]), KNOWN_TOOLS)
 
+    def test_branding_json_keys_documented(self):
+        # scoped to the step 3 sentence: a stray mention elsewhere must not satisfy it
+        m = re.search(r"Write `<CFG>/branding\.json` with keys(.*?)\(CLI flags", self.text, re.S)
+        if m is None:
+            self.fail("step 3 keys sentence not found")
+        for k in ("name", "palette", "eyebrow", "tagline", "subline", "footnote",
+                  "ramp", "outdir"):
+            self.assertIn(f"`{k}`", m.group(1), k)
+
     def test_plugin_root_paths_exist(self):
         paths = re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\s\"'`)]+)", self.text)
         self.assertTrue(paths)
