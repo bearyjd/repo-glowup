@@ -117,7 +117,8 @@ def truncate(text: str, avail: float, size: float, factor: float = 0.56,
     Known limit: width is counted in code points, so CJK/emoji (wider glyphs) may overflow.
     """
     per = size * (factor + spacing)
-    n = int(avail // per) if per else len(text)
+    # epsilon: fit() shrinks text to exactly `avail`, and float error must not cost a char
+    n = int(avail / per + 1e-6) if per else len(text)
     return text if len(text) <= n else text[:max(n - 1, 0)] + "\u2026"
 
 

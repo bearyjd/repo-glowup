@@ -229,6 +229,26 @@ class TruncateTests(unittest.TestCase):
         self.assertEqual(gb.truncate("abcdef", 1, 20, 0.6), "\u2026")
 
 
+class FitTextBoundaryTests(unittest.TestCase):
+    """Text that fit() shrinks to exactly fit must not then be truncated (float edge)."""
+
+    def test_real_social_card_strings_are_kept(self):
+        tagline = "Bazzite KDE + NVIDIA, tuned for a Meteor Lake ThinkPad"
+        subline = "bootc switch ghcr.io/bearyjd/bazzite-tower:latest"
+        self.assertEqual(gb.fit_text(tagline, 30, 652, 0.50)[1], tagline)
+        self.assertEqual(gb.fit_text(subline, 25, 652, 0.62)[1], subline)
+
+    def test_no_truncation_whenever_fit_did_not_hit_the_floor(self):
+        for avail in (300, 652, 940):
+            for factor in (0.50, 0.56, 0.62):
+                for n in range(1, 121):
+                    text = "x" * n
+                    size = gb.fit(30, avail, text, factor)
+                    if size > 30 * 0.6:  # shrunk (or not) but above the floor: it fits
+                        self.assertEqual(gb.fit_text(text, 30, avail, factor)[1], text,
+                                         (avail, factor, n))
+
+
 class CoerceTests(unittest.TestCase):
     def test_numbers_become_strings_and_missing_default_empty(self):
         out = gb.coerce_text({"name": 123, "tagline": 4.5, "eyebrow": None})
