@@ -49,6 +49,13 @@ class SkillFrontmatterTest(unittest.TestCase):
                   "ramp", "outdir"):
             self.assertIn(f"`{k}`", m.group(1), k)
 
+    def test_asks_for_direction_the_repo_does_not_state(self):
+        # the repo can't say where a project is heading; step 2 must ask the user
+        self.assertRegex(self.text, r"(?s)## 2 ·.*?emphasi[sz]e.*?## 3 ·")
+
+    def test_unchanged_readme_has_a_message(self):
+        self.assertIn("already up to date", self.text)
+
     def test_plugin_root_paths_exist(self):
         paths = re.findall(r"\$\{CLAUDE_PLUGIN_ROOT\}/([^\s\"'`)]+)", self.text)
         self.assertTrue(paths)

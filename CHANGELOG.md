@@ -3,6 +3,16 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.2]
+
+### Changed (`SKILL.md`)
+- Step 2 asks what the card should emphasize beyond what the repo states, with a rule to
+  claim only what is true now (opt-in or in-progress features are "built around", not
+  "ships by default").
+- Subline guidance raised to ~50 chars (the card fits that; the old ~36 contradicted the
+  skill's own `bootc switch` template).
+- Step 4 says to report "already up to date" when the README diff is empty.
+
 ## [0.2.1]
 
 ### Fixed
