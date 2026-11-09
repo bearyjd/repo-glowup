@@ -95,7 +95,7 @@ no automated signal after a skill edit besides a human re-running the dry run.
 
 ## Lower-priority (worth doing, not top-5)
 
-- **Golden-output snapshot tests** — byte-diff each palette's generated SVG against a
+- **Golden-output snapshot tests** — ✅ DONE: `skills/repo-glowup/scripts/tests/test_golden_snapshots.py` + `tests/golden/` (regenerate with `GLOWUP_UPDATE_GOLDEN=1`). Original note: byte-diff each palette's generated SVG against a
   committed snapshot to catch unintended visual drift from refactors (more valuable
   once the generator has more than one contributor).
 - **`SKILL.md` frontmatter lint** — a tiny script asserting required YAML keys
