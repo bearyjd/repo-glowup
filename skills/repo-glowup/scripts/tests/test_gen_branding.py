@@ -409,5 +409,23 @@ class SmokeTest(unittest.TestCase):
                     ET.parse(path)  # raises on malformed XML
 
 
+class WideGlyphFitTests(unittest.TestCase):
+    def test_cjk_counts_double_width(self):
+        self.assertEqual(gb.display_width("abc"), 3)
+        self.assertEqual(gb.display_width("\u4f60\u597d"), 4)
+        self.assertEqual(gb.display_width("\U0001F680"), 2)
+
+    def test_combining_marks_are_zero_width(self):
+        self.assertEqual(gb.display_width("e\u0301"), 1)
+
+    def test_fit_shrinks_cjk_more_than_ascii(self):
+        self.assertLess(gb.fit(84, 700, "\u4f60" * 8), gb.fit(84, 700, "a" * 8))
+
+    def test_truncate_respects_display_width(self):
+        out = gb.truncate("\u4f60" * 20, 200, 20, 0.6)  # 200/12 = 16 cells
+        self.assertTrue(out.endswith("\u2026"))
+        self.assertLessEqual(gb.display_width(out), 16)
+
+
 if __name__ == "__main__":
     unittest.main()

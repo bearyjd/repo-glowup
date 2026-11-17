@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import re
+import unicodedata
 from typing import NamedTuple
 
 # --- palette presets: 6 base colours bottom->top; the 6th doubles as the crown.
@@ -95,6 +96,18 @@ def esc(s: str) -> str:
              .replace('"', "&quot;").replace("'", "&#39;"))
 
 
+def _char_width(ch: str) -> int:
+    """Display cells for one code point: 0 combining/format, 2 wide/fullwidth, else 1."""
+    if unicodedata.combining(ch) or unicodedata.category(ch) in ("Mn", "Me", "Cf"):
+        return 0
+    return 2 if unicodedata.east_asian_width(ch) in ("W", "F") else 1
+
+
+def display_width(text: str) -> int:
+    """Width of `text` in character cells, so CJK and emoji count double."""
+    return sum(_char_width(ch) for ch in text)
+
+
 def fit(size_max: float, avail: float, text: str, factor: float = 0.56,
         size_min: float | None = None, spacing: float = 0.0) -> float:
     """Shrink a font size so `text` fits within `avail` px (rough advance model).
@@ -106,7 +119,7 @@ def fit(size_max: float, avail: float, text: str, factor: float = 0.56,
         size_min = size_max * 0.6
     if not text:
         return size_max
-    need = len(text) * (factor + spacing)
+    need = display_width(text) * (factor + spacing)
     return max(size_min, min(size_max, avail / need)) if need else size_max
 
 
@@ -114,12 +127,20 @@ def truncate(text: str, avail: float, size: float, factor: float = 0.56,
              spacing: float = 0.0) -> str:
     """Cut `text` with a trailing '\u2026' so it fits `avail` px at `size`.
 
-    Known limit: width is counted in code points, so CJK/emoji (wider glyphs) may overflow.
+    Width is measured in display cells (see display_width), so CJK/emoji count double.
     """
     per = size * (factor + spacing)
-    # epsilon: fit() shrinks text to exactly `avail`, and float error must not cost a char
-    n = int(avail / per + 1e-6) if per else len(text)
-    return text if len(text) <= n else text[:max(n - 1, 0)] + "\u2026"
+    # epsilon: fit() shrinks text to exactly `avail`, and float error must not cost a cell
+    n = int(avail / per + 1e-6) if per else display_width(text)
+    if display_width(text) <= n:
+        return text
+    out, used = "", 0
+    for ch in text:
+        w = _char_width(ch)
+        if used + w > n - 1:
+            break
+        out, used = out + ch, used + w
+    return out + "\u2026"
 
 
 def fit_text(text: str, size_max: float, avail: float, factor: float = 0.56,
