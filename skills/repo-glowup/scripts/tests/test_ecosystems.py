@@ -36,6 +36,10 @@ class EcosystemsTest(unittest.TestCase):
         fixtures = {p.name for p in FIXTURES.iterdir() if p.is_dir()}
         self.assertEqual(fixtures, set(self.data))
 
+    def test_skill_documents_alt_markers(self):
+        skill = (ROOT / "skills" / "repo-glowup" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("alt_markers", skill)
+
     def test_go_and_container_differ_from_python(self):
         py = self.data["python"]["palette"]
         self.assertNotEqual(self.data["go"]["palette"], py)
