@@ -55,7 +55,8 @@ table; continue with whatever is available:
   `[project].name` / Cargo `[package].name` / go.mod `module` / `composer.json` `name` /
   `*.gemspec`; owner from the remote, else omit owner-dependent badges.
 - Ecosystem: match root files against `references/ecosystems.json` (it also gives each
-  palette). If **more than one** matches (polyglot/monorepo), list them and let the user
+  palette); an ecosystem matches if a root file equals any of its `markers` or
+  `alt_markers` (entries may be globs like `*.gemspec`). If **more than one** matches (polyglot/monorepo), list them and let the user
   pick in step 2; never take the first. `generic` is the no-match fallback only, not a
   second match.
 - License → SPDX; `.github/workflows/*.yml` → main build/test workflow for the status
