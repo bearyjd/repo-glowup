@@ -427,5 +427,24 @@ class WideGlyphFitTests(unittest.TestCase):
         self.assertLessEqual(gb.display_width(out), 16)
 
 
+class SkillMdLimitTests(unittest.TestCase):
+    """SKILL.md's social-card text limits must match what gen_branding.py does."""
+
+    @staticmethod
+    def _row(field: str) -> str:
+        skill = SCRIPTS_DIR.parent / "SKILL.md"
+        rows = [ln for ln in skill.read_text(encoding="utf-8").splitlines()
+                if ln.startswith(f"| {field} |")]
+        assert len(rows) == 1, f"expected one SKILL.md row for {field}"
+        return rows[0]
+
+    def test_tagline_and_subline_limits_match_generator(self):
+        for field in ("tagline", "subline"):
+            full, ellipsis = gb.social_text_limits(field)
+            row = self._row(field)
+            self.assertEqual(int(re.search(r"\u2264 ~(\d+) chars", row).group(1)), full, field)
+            self.assertEqual(int(re.search(r"up to ~(\d+) chars", row).group(1)), ellipsis, field)
+
+
 if __name__ == "__main__":
     unittest.main()

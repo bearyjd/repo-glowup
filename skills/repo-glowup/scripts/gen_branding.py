@@ -39,6 +39,16 @@ PALETTES: dict[str, list[str]] = {
 FONT = "Cantarell, 'Segoe UI', 'Noto Sans', sans-serif"
 MONO = "'Fira Code', 'DejaVu Sans Mono', ui-monospace, monospace"
 
+# Social card text geometry. SKILL.md's tagline/subline limits are derived from these
+# (see social_text_limits and the SKILL.md limit test).
+SIZE_FLOOR = 0.6          # fit() never shrinks below this fraction of size_max
+CARD_RIGHT = 1240         # right edge of text on the social card and banner
+SOCIAL_TX = 588           # social card text left edge
+SOCIAL_FIELDS = {         # field -> (size_max, char-width factor)
+    "tagline": (30, 0.50),
+    "subline": (25, 0.62),
+}
+
 
 TEXT_KEYS = ("name", "eyebrow", "tagline", "subline", "footnote")
 _RAMP_RE = re.compile(r"^#?(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$")
@@ -113,10 +123,10 @@ def fit(size_max: float, avail: float, text: str, factor: float = 0.56,
     """Shrink a font size so `text` fits within `avail` px (rough advance model).
 
     `spacing` is letter-spacing as a fraction of font size; never goes below
-    `size_min` (default 60% of size_max) -- use truncate() for what still overflows.
+    `size_min` (default SIZE_FLOOR of size_max) -- use truncate() for what still overflows.
     """
     if size_min is None:
-        size_min = size_max * 0.6
+        size_min = size_max * SIZE_FLOOR
     if not text:
         return size_max
     need = display_width(text) * (factor + spacing)
@@ -148,6 +158,14 @@ def fit_text(text: str, size_max: float, avail: float, factor: float = 0.56,
     """(font size, escaped text) shrunk to fit and truncated if the floor is not enough."""
     size = fit(size_max, avail, text, factor, spacing=spacing)
     return size, esc(truncate(text, avail, size, factor, spacing))
+
+
+def social_text_limits(field: str) -> tuple[int, int]:
+    """(chars at full size, chars where the ellipsis starts) for a social-card field."""
+    size_max, factor = SOCIAL_FIELDS[field]
+    avail = CARD_RIGHT - SOCIAL_TX
+    return (int(avail / (size_max * factor) + 1e-6),
+            int(avail / (size_max * SIZE_FLOOR * factor) + 1e-6))
 
 
 class Geo(NamedTuple):
@@ -201,12 +219,14 @@ def build(kind: str, theme: str, cfg: dict, ramp: list[str]) -> str:
     if kind == "social":
         W, H, rx = 1280, 640, 0
         g = Geo(cx=352, w=165, h=82, t=40, gap=16, bottom_cy=476)
-        tx = 588
-        avail = 1240 - tx
+        tx = SOCIAL_TX
+        avail = CARD_RIGHT - tx
         ws, name = fit_text(cfg["name"], 84, avail)
-        ts, tagline = fit_text(cfg["tagline"], 30, avail, 0.50)
+        ts, tagline = fit_text(cfg["tagline"], SOCIAL_FIELDS["tagline"][0], avail,
+                               SOCIAL_FIELDS["tagline"][1])
         es, eyebrow = fit_text(cfg["eyebrow"], 24, avail, 0.62, 0.25)
-        ss, subline = fit_text(cfg["subline"], 25, avail, 0.62)
+        ss, subline = fit_text(cfg["subline"], SOCIAL_FIELDS["subline"][0], avail,
+                               SOCIAL_FIELDS["subline"][1])
         fs, footnote = fit_text(cfg["footnote"], 22, avail)
         body = (
             f'  <text x="{tx}" y="236" font-family="{MONO}" font-size="{es:g}" '
@@ -226,7 +246,7 @@ def build(kind: str, theme: str, cfg: dict, ramp: list[str]) -> str:
         W, H, rx = 1280, 340, 24
         g = Geo(cx=150, w=70, h=35, t=18, gap=8, bottom_cy=250)
         tx = 300
-        avail = 1240 - tx
+        avail = CARD_RIGHT - tx
         ws, name = fit_text(cfg["name"], 78, avail)
         ts, tagline = fit_text(cfg["tagline"], 27, avail, 0.50)
         es, eyebrow = fit_text(cfg["eyebrow"], 20, avail, 0.62, 0.25)

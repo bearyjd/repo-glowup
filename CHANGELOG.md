@@ -3,6 +3,15 @@
 All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+- `gen_branding.py`: social-card text geometry hoisted into named constants, with a
+  `social_text_limits()` helper; a test now checks SKILL.md's tagline/subline limits
+  against it.
+- `SKILL.md`: tagline limit is ~43 chars at full size (was ~40); subline is ~42 (was
+  ~50), shrinking to ~70 before the ellipsis starts.
+
 ## [0.2.2]
 
 ### Changed (`SKILL.md`)

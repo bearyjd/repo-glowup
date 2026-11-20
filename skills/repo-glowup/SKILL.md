@@ -69,8 +69,8 @@ Draft metadata:
 | name | repo name |
 | ecosystem / palette | from `ecosystems.json` (or by vibe) |
 | eyebrow | short uppercase mono, e.g. `TYPESCRIPT · EDGE RUNTIME` |
-| tagline | one sentence, ≤ ~40 chars (the social card is narrower than the banner) — condense the repo description |
-| subline | install/run line, ≤ ~50 chars (more shows an ellipsis on the card): `npm i X` / `pipx install X` / `cargo add X` / `go install …` / `docker pull ghcr.io/<owner>/<name>` / `bootc switch ghcr.io/<owner>/<name>:latest` (container/bootc OS images) |
+| tagline | one sentence, ≤ ~43 chars (full size on the social card, which is narrower than the banner; shrinks up to ~72 chars, then an ellipsis) — condense the repo description |
+| subline | install/run line, ≤ ~42 chars (full size on the card; shrinks up to ~70 chars, then an ellipsis): `npm i X` / `pipx install X` / `cargo add X` / `go install …` / `docker pull ghcr.io/<owner>/<name>` / `bootc switch ghcr.io/<owner>/<name>:latest` (container/bootc OS images) |
 | footnote | 3 short value props (social card only) |
 | description | ≤ 350 chars, accurate |
 | topics | lowercase-hyphen tags; 8–15 only when proposing for a repo with none/few |
